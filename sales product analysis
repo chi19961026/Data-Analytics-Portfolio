@@ -1,0 +1,229 @@
+# import the required libraries
+import pandas as pd
+import glob
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def print_divider():
+    print("")
+    print(
+        "-------------------------------------------------------------------------------------------"
+    )
+    print("")
+
+
+# look into one file first
+jan = pd.read_csv(
+    "/Users/yoonchilee/Desktop/Python/sales product ds/archive/Sales_January_2019.csv"
+)
+# print(jan.head())
+# print(jan.describe())
+
+
+# read multiple csv and combine them as one dataframe
+file_paths = glob.glob(
+    "/Users/yoonchilee/Desktop/Python/sales product ds/archive/*.csv"
+)
+dfs = []
+for file_path in file_paths:
+    df = pd.read_csv(file_path)
+    dfs.append(df)
+combined_df = pd.concat(dfs, axis=0)
+
+# print(combined_df.head())
+
+# Data cleaning
+# drop null, duplicated and ineffective data
+# print(combined_df.isna().sum())
+combined_df = combined_df.dropna()
+
+# print(combined_df.duplicated().sum())
+combined_df = combined_df.drop_duplicates()
+
+# print(combined_df['Quantity Ordered'].unique())
+# print(combined_df[combined_df['Quantity Ordered'] == "Quantity Ordered"])
+combined_df = combined_df.drop(index=254)
+
+# Data manipulating
+# print(combined_df.info())
+
+# Quantity Ordered as int,  Price Each as float, add sales column
+combined_df["Quantity Ordered"] = combined_df["Quantity Ordered"].astype("int32")
+combined_df["Price Each"] = combined_df["Price Each"].astype("float")
+combined_df["sales"] = combined_df["Price Each"] * combined_df["Quantity Ordered"]
+
+# Order Date as datetime, add Year & Month columns
+combined_df["Order Date"] = pd.to_datetime(
+    combined_df["Order Date"], format="%m/%d/%y %H:%M"
+)
+combined_df["Year"] = combined_df["Order Date"].dt.year
+# print(combined_df["Year"].unique())
+# print(print(combined_df["Order Date"][combined_df["Year"] == 2020])
+#       )
+combined_df["Month"] = combined_df["Order Date"].dt.month
+# print(combined_df["Month"].unique())
+combined_df["Day"] = combined_df["Order Date"].dt.day
+
+
+# print(combined_df.info())
+# print(combined_df.head(10))
+
+
+# sales overview of 2019
+# annual sales revenue
+df_2019 = combined_df[combined_df["Year"] == 2019]
+annual_sales_rev = sum(df_2019["sales"])
+# print(annual_sales_rev)
+
+# month revenu
+month_2019 = df_2019.groupby("Month")["sales"].sum()
+print(month_2019)
+print_divider()
+
+
+# month_2019.plot(kind="bar")
+# plt.xlabel("Month")
+# plt.ylabel("Sales Revenue")
+# plt.title("2019 Monthly Sales Revenue")
+# plt.show()
+
+
+proportion = month_2019 / month_2019.sum()
+# print(proportion)
+# proportion.plot(kind="line")
+# plt.xlabel("Month")
+# plt.ylabel("Sales Revenue proportion")
+# plt.title("2019 Monthly Sales Revenue proportion")
+# plt.show()
+
+
+# which days in December generate the higher revenue
+df_2019_dec = df_2019[df_2019["Month"] == 12]
+december_rev = df_2019_dec.groupby("Day")["sales"].sum()
+print(december_rev)
+print_divider()
+# december_rev.plot(kind="bar")
+# plt.xlabel("Day")
+# plt.ylabel("Sales Revenue")
+# plt.title("2019_December Daily Sales Revenue")
+# # plt.show()
+
+
+# product overview of 2019
+product_sales = (
+    df_2019.groupby("Product")[["Quantity Ordered", "sales"]]
+    .sum()
+    .sort_values(by="sales", ascending=False)
+)
+print(product_sales)
+print_divider()
+
+product_sales["quantity_pro"] = round(
+    product_sales["Quantity Ordered"] / product_sales["Quantity Ordered"].sum(), 2
+)
+product_sales["sales_pro"] = round(
+    product_sales["sales"] / product_sales["sales"].sum(), 2
+)
+print(product_sales)
+
+
+# In which month did the top three products have the highest sales?
+
+top_3_products = ["Macbook Pro Laptop", "iPhone", "ThinkPad Laptop"]
+df_top3 = df_2019[df_2019["Product"].isin(top_3_products)]
+
+# NOTE: The unstack method is then applied to reshape the resulting DataFrame, so that each product becomes a separate column.
+grp_top3 = df_top3.groupby(["Product", "Month"])["sales"].sum().unstack(level=0)
+
+# grp_top3.plot(kind="line", marker="o")
+# plt.xlabel("Month")
+# plt.ylabel("Sales")
+# plt.title("Sales of Top Three Products by Month")
+# plt.legend(title="Product")
+# plt.show()
+# print_divider()
+
+
+print(df_2019.columns)
+
+
+# What State/City had the highest number of sales?
+print(df_2019["Purchase Address"].head())
+print_divider()
+
+df_2019["state"] = df_2019["Purchase Address"].apply(lambda x: x[-8:-6])
+print(df_2019["state"].head(10))
+print_divider()
+
+state_sales = df_2019.groupby("state")["sales"].sum().sort_values(ascending=False)
+print(state_sales)
+
+# NOTE:Here, the lambda function splits each address string by comma , using the split() method and selects the second element (index [1]) from the resulting list.
+df_2019["city"] = df_2019["Purchase Address"].apply(lambda x: x.split(",")[1])
+print(df_2019["city"].head(10))
+print_divider()
+
+city_sales = df_2019.groupby("city")["sales"].sum().sort_values(ascending=False)
+city_sales = city_sales / 1000000
+print(city_sales)
+
+# city_sales.plot(kind="bar")
+# plt.xlabel("City")
+# plt.ylabel("Sales (million)")
+# plt.title("Cities Sales")
+# plt.xticks(rotation=45)
+# plt.show()
+print_divider()
+
+
+# What time should we display adverstisement to maximize likelihood of customer's buying product?
+print(df_2019["Order Date"].head(10))
+df_2019["TIME"] = df_2019["Order Date"].dt.hour
+df_2019["TIME"] = df_2019["TIME"].astype(int)
+print(df_2019["TIME"].head())
+print_divider()
+
+ad_time = df_2019.groupby("TIME")["sales"].sum()
+ad_time.plot(kind="line")
+plt.xlabel("hour")
+plt.ylabel("total sales")
+
+# Get the top three sales points
+top_three_indices = ad_time.sort_values(ascending=False).head(3).index
+top_three_sales = ad_time[top_three_indices]
+
+print("top_three_indices", top_three_indices)
+print_divider()
+print(top_three_sales)
+
+# Plot scatter points for the top three sales
+# plt.scatter(top_three_indices, top_three_sales, color="red", marker="o")
+# plt.show()
+
+
+# What is average price of orders?
+print(df_2019.columns)
+print_divider()
+print("total products sales:", len(df_2019["Order ID"]))
+print("total non-duplicate orders:", df_2019["Order ID"].nunique())
+
+print_divider()
+order_avg = round(df_2019["sales"].sum() / df_2019["Order ID"].nunique(), 2)
+print("order price average is :", order_avg)
+print_divider()
+
+
+# What products are most often sold together?
+# Group orders by Order ID and collect the products in each order
+order_groups = df_2019.groupby("Order ID")["Product"].apply(
+    list
+)  # apply(list) applies the list function to each group, converting the products of each order into a list. The apply method is used to apply a function (in this case, list) to each group separately.
+
+# Filter the order_groups to include only lists with 2 or more elements
+filtered_order_groups = order_groups[order_groups.apply(lambda x: len(x) >= 2)]
+
+# Print the filtered_order_groups
+print(filtered_order_groups.head(10))
+print_divider()
+print("top 5 products combo are:", filtered_order_groups.value_counts().head())
